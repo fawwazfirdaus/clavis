@@ -50,35 +50,6 @@ open clavis.xcodeproj
 
 3. Build and run the project (⌘R)
 
-## Usage
-
-### First Time Setup
-
-1. Launch Clavis and complete the onboarding flow
-2. Choose a distinctive physical object as your key
-3. Follow the guided enrollment process (capture 5–8 photos from different angles)
-4. Configure which apps or categories to block
-5. Set up a Focus Mode named "Keylock Mode" with your distracting apps
-
-### Locking Apps
-
-1. Tap "Lock with my key"
-2. Scan your enrolled object to confirm presence
-3. Focus Mode activates → distracting apps are blocked
-
-### Unlocking Apps
-
-1. Tap "Scan to Unlock"
-2. Point camera at your enrolled object
-3. On successful match → Focus Mode deactivates → apps become available
-
-### Replacing Your Key
-
-If you need to replace your key object:
-1. Go to Settings
-2. Select "Reset Key"
-3. Follow the enrollment process again
-
 ## Architecture
 
 Clavis uses the **MV (Model-View)** architecture pattern, following the principle that **"View is the ViewModel"** in SwiftUI.
@@ -108,20 +79,13 @@ Clavis is designed with privacy as a core principle:
 - ✅ Easy reset: "Delete my key" clears all stored data
 - ✅ No tracking, analytics, or external data collection
 
-## Limitations (v1)
-
-- Single key object only (no multiple keys)
-- iOS only (no iPad/Mac support yet)
-- Behavioral tool (not a hardcore blocker)
-- Requires manual Focus Mode setup
-
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-[Add your license here]
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
