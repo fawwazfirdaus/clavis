@@ -42,7 +42,36 @@ Clavis is a native iOS app (Swift / SwiftUI) that helps users reduce digital dis
 
 ## 4. Architecture
 
-Clavis uses the **MV (Model-View)** architecture pattern, separating business logic (Model) from presentation (View). This keeps the codebase clean, testable, and maintainable.
+Clavis uses the **MV (Model-View)** architecture pattern, following the principle that **"View is the ViewModel"** in SwiftUI.
+
+### MV Pattern Components
+
+**M = Model (Aggregate Root Model)**
+
+A small number of aggregate root models, each representing a bounded context (e.g., `KeyManager`, `LockStateManager`, `AppsProfileManager`). These models:
+
+- Fetch and persist data (usually via services / integration layer)
+- Own collections of entities and domain objects
+- Provide operations: add, remove, filter, sort, search, etc.
+- Can communicate with other aggregate models when needed
+- Do NOT contain UI-specific logic
+
+**V = View (SwiftUI View, which is also the ViewModel)**
+
+SwiftUI views are treated as both view and view-model:
+
+- Bind directly to `@StateObject` / `@EnvironmentObject` aggregate models
+- Format data for display and handle simple UI state (selected item, sheet toggles, text field bindings)
+- Do NOT contain networking or domain logic
+
+### Philosophy
+
+SwiftUI already has MVVM baked in through its reactive data binding system, so there's no need for a redundant ViewModel layer. Instead of creating one ViewModel per screen (e.g., `HomeViewModel`, `OrderListViewModel`), we use:
+
+- A few aggregate models based on domain (bounded context), not screen count
+- Views that bind directly to those models and act as their own view-models
+
+This approach keeps the architecture simple, testable (unit tests against models, E2E for flows), and scalable (split models by bounded context when they grow).
 
 ### Layers
 
