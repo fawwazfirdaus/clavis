@@ -13,7 +13,7 @@ import Foundation
 struct Key: Codable, Identifiable {
     let id: UUID
     let template: KeyTemplate
-    /// Optional user-friendly name for the key (e.g., "My Toy", "Blue Mug")
+    /// Optional user-friendly name for the key (e.g., "My Toy", "Black Mug")
     var name: String?
     var createdAt: Date
     
