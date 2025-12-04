@@ -17,7 +17,7 @@ Clavis is a native iOS app that helps you reduce digital distractions by using a
 ## Features
 
 - 🎯 **Physical Key Concept**: Use any object you own as your key
-- 📷 **On‑Device Computer Vision**: Fast, private object recognition using Vision/Core ML
+- 📷 **On‑Device Computer Vision**: Fast, private 3D object recognition using ARKit
 - 🔒 **Focus Mode Integration**: Seamlessly blocks apps using iOS Focus Mode
 - 🎨 **Guided Onboarding**: Smooth setup flow with helpful guidance
 - 🔐 **Privacy First**: All processing happens on‑device; no data leaves your phone
@@ -25,8 +25,8 @@ Clavis is a native iOS app that helps you reduce digital distractions by using a
 
 ## Requirements
 
-- iOS 15.0 or later
-- Device with camera support
+- iOS 16.0 or later
+- Device with camera support (ARKit-compatible device recommended for best results)
 - Xcode 14.0+ (for development)
 
 ## Installation

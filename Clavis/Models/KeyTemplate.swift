@@ -8,12 +8,12 @@
 import Foundation
 
 /// Represents stored key feature data for a physical object.
-/// Implements data structures from SPEC §7 Computer Vision Design.
+/// Now uses 3D features extracted from ARKit point clouds.
 struct KeyTemplate: Codable, Identifiable {
     let id: UUID
     let enrolledDate: Date
-    /// Feature vectors extracted from enrollment images.
-    /// Stored as abstract data - actual Vision/CoreML integration will be added later.
+    /// 3D feature vectors extracted from ARKit point clouds during enrollment.
+    /// Each vector represents 3D geometric, spatial, and surface features.
     let featureVectors: [KeyFeatureVector]
     
     init(id: UUID = UUID(), enrolledDate: Date = Date(), featureVectors: [KeyFeatureVector]) {
@@ -21,12 +21,24 @@ struct KeyTemplate: Codable, Identifiable {
         self.enrolledDate = enrolledDate
         self.featureVectors = featureVectors
     }
+    
+    /// Convenience initializer from array of Float arrays (3D feature vectors).
+    init(id: UUID = UUID(), enrolledDate: Date = Date(), features: [[Float]]) {
+        self.id = id
+        self.enrolledDate = enrolledDate
+        self.featureVectors = features.map { KeyFeatureVector(data: $0) }
+    }
+    
+    /// Converts feature vectors to array of Float arrays for matching.
+    var embeddings: [[Float]] {
+        featureVectors.map { $0.data }
+    }
 }
 
-/// Represents a single feature vector extracted from an enrollment image.
+/// Represents a single 3D feature vector extracted from an ARKit point cloud.
 struct KeyFeatureVector: Codable {
-    /// Placeholder for feature vector data - will be replaced with actual Vision/CoreML embeddings.
-    /// For now, this is a simple abstraction that can store Float arrays.
+    /// 3D feature vector data containing geometric, spatial, surface, and statistical features.
+    /// Extracted from point clouds using Feature3DExtractor.
     let data: [Float]
     
     init(data: [Float]) {

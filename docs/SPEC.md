@@ -124,11 +124,12 @@ Manages all physical key objects that can be used across modes. Keys can be assi
 **Responsibilities:**
 
 - Manage a collection of all enrolled keys (each key has a unique ID).
-- Take multiple images from camera during key enrollment.
-- Extract feature vectors from each image using Vision/Core ML.
-- Store feature vectors securely on device (Keychain).
-- During verification, compare new scan against stored vectors for a specific key.
-- Provide confidence scores and error types (e.g., blurry image, low light).
+- Process continuous ARKit feed during key enrollment, automatically selecting high-quality frames.
+- Extract 3D feature vectors from point clouds in selected ARFrames.
+- Validate frame quality (ARKit tracking state, point cloud density, object size/distance) and ensure angle diversity.
+- Store 3D feature vectors securely on device (Keychain) in a key template.
+- During verification, process continuous ARKit feed and compare each frame's 3D features against stored template.
+- Provide confidence scores and error types (e.g., insufficient points, poor tracking, too far/close).
 - Support key reuse: the same key can be assigned as main key for one mode and temporary key for another mode.
 - Allow keys to be updated, renamed, or removed.
 
@@ -211,14 +212,17 @@ Tracks which onboarding steps have been completed.
 
 **Main Key Enrollment for First Mode**
 
-- User captures 5–8 photos of the main key object for this mode.
-- Real‑time validation: lighting, blur, distinctiveness.
+- User positions the main key object in front of camera and slowly moves it through different angles.
+- App continuously scans the object using ARKit, automatically capturing high-quality 3D point clouds.
+- User can tap to select a region of interest (ROI) for more precise object focus.
+- Real‑time feedback: progress indicator, angle diversity visualization, quality warnings (tracking state, point density, distance).
+- Enrollment completes automatically when sufficient quality frames (8-12) from diverse angles are collected.
 - Key is enrolled and assigned as the main key for the first mode.
 
 **Temporary Key Enrollment (Optional)**
 
 - User can optionally enroll one or more temporary key objects for the first mode.
-- Same enrollment process as main key (5–8 photos).
+- Same continuous ARKit scanning enrollment process as main key (automatic 3D point cloud capture).
 - User can reuse an already-enrolled key or enroll a new one.
 - User selects which apps can be unlocked with temporary key(s).
 
@@ -246,25 +250,36 @@ Tracks which onboarding steps have been completed.
 
 - User selects a mode (if multiple modes exist).
 - User taps "Lock with my key."
-- App scans that mode's main key object to confirm presence.
-- On success: Focus Mode turns ON → apps for that mode become blocked.
+- ARKit camera opens with continuous scanning active.
+- User positions the mode's main key object in front of camera.
+- User can tap to select a region of interest (ROI) for more precise matching.
+- App continuously processes ARFrames, extracting 3D features from point clouds and comparing against stored template.
+- Real-time feedback shows confidence score, match status, and ARKit tracking state.
+- On match (confidence exceeds threshold in 3 consecutive frames): Focus Mode turns ON → apps for that mode become blocked.
 - Main screen updates to Locked state, showing which mode is locked.
 - All temporary keys for that mode are reset to unused state.
 
 ### 6.4 Unlock Flow
 
 - User taps "Scan to Unlock."
-- Camera opens for scanning the locked mode's main key.
-- On match: Focus Mode turns OFF → apps become available.
+- ARKit camera opens with continuous scanning active.
+- User positions the locked mode's main key object in front of camera.
+- User can tap to select a region of interest (ROI) for more precise matching.
+- App continuously processes ARFrames, extracting 3D features from point clouds and comparing against stored template.
+- Real-time feedback shows confidence score, match status, and ARKit tracking state.
+- On match (confidence exceeds threshold in 3 consecutive frames): Focus Mode turns OFF → apps become available.
 - Main screen updates to Unlocked state.
 - All temporary key usage resets for the unlocked mode (allowing them to be used again in the next lock cycle).
 
 ### 6.5 Temporary Unlock Flow
 
 - While a mode is locked, user taps "Temporary Unlock."
-- Camera opens for scanning any of that mode's temporary keys.
-- App tries to match the scan against all temporary keys for that mode (skipping already-used keys).
-- On match: Selected apps for that mode become temporarily available for a limited time.
+- ARKit camera opens with continuous scanning active.
+- User positions any of that mode's temporary keys in front of camera.
+- User can tap to select a region of interest (ROI) for more precise matching.
+- App continuously processes ARFrames, extracting 3D features from point clouds and comparing against all temporary keys for that mode (skipping already-used keys).
+- Real-time feedback shows which key (if any) is being matched, confidence score, and ARKit tracking state.
+- On match (confidence exceeds threshold in 3 consecutive frames): Selected apps for that mode become temporarily available for a limited time.
 - The matched temporary key is marked as used for the current lock cycle of that mode.
 - After time expires or user manually ends temporary unlock, apps are blocked again.
 - That specific temporary key cannot be used again until the next lock cycle (after full unlock with main key).
@@ -275,30 +290,144 @@ Tracks which onboarding steps have been completed.
 
 ### Requirements
 
+- Target platform: iOS 16 or later (leveraging ARKit for 3D object scanning and tracking)
 - On‑device inference
 - Offline operation
-- Fast classification (<1 second)
-- Focus on feature matching, not classification
+- Fast verification (<1 second per frame)
+- Focus on feature matching (same-object verification), not multi-class classification
+- Continuous real-time scanning (no manual photo capture)
+- High accuracy under real-world conditions while keeping the scanning flow low-friction
+- 3D object capture and tracking for robust recognition across lighting and background changes
 
-### Enrollment
+### Enrollment Process
 
-- Take 5–8 snapshots
-- Extract a feature vector from each image
-- Store vectors in a "key template" locally and securely
+**Continuous Scanning Approach:**
+- ARKit session runs continuously during enrollment with world tracking enabled
+- User positions the key object in front of camera and slowly moves it through different angles
+- App automatically captures and processes ARFrames from the AR session
+- No manual "take photo" button required
+- User can tap to select a region of interest (ROI) for more precise object focus
 
-### Verification
+**Frame Selection Criteria:**
+- Process frames at ~2-5 FPS (not every frame) to balance quality and performance
+- Select frames that meet quality thresholds:
+  - ARKit tracking state is normal (not limited or unavailable)
+  - Sufficient point cloud density (minimum points detected)
+  - Adequate object size/distance (point cloud volume within acceptable range)
+  - Good lighting conditions (ARKit requires sufficient lighting for tracking)
+- Collect 8-12 high-quality 3D feature vectors from diverse angles
+- Track angle diversity: ensure frames cover different viewpoints (front, sides, top, etc.)
+- Provide real-time visual feedback:
+  - Progress indicator showing how many quality frames have been captured
+  - Angle diversity visualization (e.g., showing which angles are still needed)
+  - Quality warnings (too far, too close, insufficient points, poor tracking)
 
-- Extract feature vector from current camera frame
-- Compare against stored template
-- If best similarity score exceeds threshold → match
-- Otherwise → no match
+**Enrollment Completion:**
+- Enrollment completes automatically when:
+  - Minimum 8 quality frames collected AND
+  - Sufficient angle diversity achieved (covers multiple viewpoints)
+- User can manually complete enrollment early if satisfied
+- User can restart enrollment if quality is insufficient
 
-### Heuristics
+**Feature Extraction & Storage:**
+- Extract 3D feature vectors from point clouds in each selected ARFrame
+- Point clouds are obtained from ARFrame's rawFeaturePoints
+- Features include: geometric (centroid, bounding box, principal axes), spatial distribution, surface normals, and statistical properties
+- Store all 3D feature vectors in a "key template" locally and securely (Keychain)
+- Template contains: array of 3D feature vectors (each is an array of floats), enrollment metadata (timestamp, device info)
 
-- Brightness check
-- Blur detection
-- Distance/framing guidance
-- Warnings for uniform or low‑texture objects
+### Verification Process
+
+**Continuous Scanning:**
+- ARKit session runs continuously during verification with world tracking enabled
+- Extract 3D feature vector from point cloud in each ARFrame (processed at ~5-10 FPS)
+- Point clouds are filtered by ROI if user has selected a region of interest
+- Compare each frame's 3D feature vector against stored template
+- Calculate similarity scores (cosine similarity) for all stored vectors in template
+- Use best (highest) similarity score from template
+
+**Match Decision:**
+- If best similarity score exceeds threshold (cosine similarity ≥ 0.90) → match
+- If best similarity score is below threshold → no match
+- Apply temporal smoothing: require match in 3 consecutive frames to reduce false positives (balanced policy)
+- Return match result with confidence score
+- ROI tracking: User can tap to select region of interest for more precise matching (filters point cloud to ROI)
+
+**Real-time Feedback:**
+- Show live confidence score during scanning
+- Visual indicators for match/no match
+- Guidance messages for low-quality scans (insufficient points, poor tracking, too far/close)
+- ARKit tracking state indicator (normal/limited/unavailable)
+
+### Quality Heuristics
+
+**Frame Quality Checks (applied during both enrollment and verification):**
+
+- **ARKit Tracking State:**
+  - Check ARFrame's camera tracking state (normal/limited/unavailable)
+  - Reject frames when tracking is unavailable
+  - Provide guidance: "Move device slowly" or "Improve lighting" when tracking is limited
+
+- **Point Cloud Density:**
+  - Ensure minimum number of points detected in point cloud
+  - Reject frames with insufficient points (indicates poor depth sensing or too far)
+  - Provide guidance: "Move closer" or "Improve lighting"
+
+- **Object Size/Distance:**
+  - Calculate bounding box volume from point cloud
+  - Ensure volume is within acceptable range (not too small = too far, not too large = too close)
+  - Provide guidance: "Move closer" or "Move farther"
+
+- **Lighting Conditions:**
+  - ARKit requires sufficient lighting for world tracking
+  - Reject frames when tracking is limited due to poor lighting
+  - Provide guidance: "Move to better lighting"
+
+- **ROI Selection:**
+  - User can tap to select region of interest for more precise object focus
+  - Point cloud is filtered to ROI to improve matching accuracy
+  - ROI helps isolate object from background
+
+- **Distinctiveness Warnings:**
+  - Analyze point cloud density and distribution
+  - Warn if object appears too uniform or lacks 3D structure
+  - Suggest choosing a more distinctive 3D object during enrollment (objects with depth/texture work best)
+
+### Technical Implementation Notes
+
+**ARKit Integration:**
+- Use ARKit's `ARSession` with `ARWorldTrackingConfiguration` for world tracking and depth sensing
+- Access point clouds via `ARFrame.rawFeaturePoints` (available on devices with LiDAR or depth cameras)
+- Use `ARObjectScanningConfiguration` for enrollment mode (when supported) for more detailed object capture
+- Process ARFrames asynchronously to avoid blocking UI
+- ARKit provides world tracking state, camera pose, and point cloud data in each frame
+
+**3D Feature Extraction:**
+- Extract geometric features: centroid, bounding box dimensions, principal axes
+- Extract spatial distribution features: histogram of point distribution across space
+- Extract surface features: normal vectors, surface roughness estimates
+- Extract statistical features: mean, variance, moments of point distribution
+- Normalize all features to [0, 1] range for consistent matching
+- Feature extraction is performed on-device using geometric computations (no ML model required)
+
+**3D Feature Matching:**
+- Use cosine similarity to compare 3D feature vectors
+- Compare against all stored feature vectors in template and use best match score
+- Apply temporal smoothing: require 3 consecutive matching frames (cosine similarity ≥ 0.90)
+- Matching is performed on-device using vector similarity computations
+
+**Performance Optimization:**
+- Throttle frame processing to avoid excessive CPU/battery usage (2-5 FPS for enrollment, 5-10 FPS for verification)
+- Cache feature vectors in memory during active scanning sessions
+- Use background queues for feature extraction and comparison
+- Sample point clouds when density is very high (e.g., limit to first N points for performance)
+
+**Error Handling:**
+- Handle camera permission denials gracefully
+- Provide clear error messages for hardware limitations (devices without depth sensing)
+- Check ARKit support (`ARWorldTrackingConfiguration.isSupported`) before starting session
+- Handle ARKit tracking state changes (normal/limited/unavailable) with appropriate user feedback
+- Support fallback to lower frame rates on older devices
 
 ## 8. System Integration
 
