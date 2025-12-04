@@ -45,7 +45,7 @@ cd clavis
 
 2. Open the project in Xcode:
 ```bash
-open clavis.xcodeproj
+open Clavis.xcodeproj
 ```
 
 3. Build and run the project (⌘R)
