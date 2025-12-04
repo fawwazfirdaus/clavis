@@ -8,48 +8,50 @@ Clavis is a native iOS app (Swift / SwiftUI) that helps users reduce digital dis
 
 ### Core Concept
 
-- User picks a visually distinctive object (e.g., a toy, book, patterned mug) as their **main key**.
-- User scans this object from multiple angles to "enroll" it.
-- User leaves that object at home.
 - User can create multiple **modes** (e.g., Work Mode, Sleep Mode, Study Mode), each with its own configuration of apps to block.
-- Each mode can optionally have its own **temporary key** (a different physical object) that allows unlocking certain apps for a limited time, one use per lock cycle.
+- For each mode, user picks a visually distinctive object (e.g., a toy, book, patterned mug) as that mode's **main key**.
+- User scans each main key object from multiple angles to "enroll" it.
+- User leaves main key objects at home.
+- Each mode can optionally have multiple **temporary keys** (different physical objects) that allow unlocking certain apps for a limited time, one use per lock cycle per key.
+- The same physical key object can be reused across different modes (e.g., a key can be the main key for Work Mode and a temporary key for Sleep Mode).
 - When a mode is locked, selected apps for that mode are blocked/hidden via Focus Mode.
-- To unlock, user must physically return to the main key object and scan it again.
+- To unlock, user must physically return to that mode's main key object and scan it again.
 
 ## 2. Goals & Non‑Goals
 
 ### Goals (v1)
 
-- Enroll one physical object as the main key (shared across all modes).
 - Create and manage multiple modes (e.g., Work, Sleep, Study) with distinct configurations.
-- For each mode, optionally enroll a temporary key for limited app access.
+- For each mode, enroll one physical object as that mode's main key.
+- For each mode, optionally enroll multiple temporary keys for limited app access.
+- Allow the same physical key object to be reused across different modes (as main key for one mode, temporary key for another, etc.).
 - Recognize enrolled objects using on‑device computer vision.
 - Allow the user to select apps/categories to block per mode.
 - Lock/unlock distraction apps using Focus Mode / Screen Time.
-- Allow temporary key to unlock specific apps for a limited time (one use per lock cycle).
+- Allow temporary keys to unlock specific apps for a limited time (one use per lock cycle per key).
 - Switch between modes and lock/unlock each mode independently.
 - Provide a smooth, guided onboarding flow.
 
 ### Non‑Goals (v1)
 
-- Multiple main keys (e.g., Work key + Sleep key). Note: One main key shared across all modes, with mode-specific temporary keys supported.
 - Cloud sync across devices (no iPad/Mac support yet).
 - Strong anti‑tampering enforcement.
 - Parental control or MDM-level lock enforcement.
 
 ## 3. User Stories
 
-- **Enroll Main Key**: User selects a physical object and scans it from multiple angles as their main key (shared across all modes).
 - **Create Mode**: User creates a new mode (e.g., Work, Sleep, Study) with a name and configuration.
+- **Enroll Main Key**: User selects a physical object and scans it from multiple angles as the main key for a specific mode.
 - **Configure Mode**: User selects categories or specific apps to restrict when that mode is locked.
-- **Enroll Temporary Key**: User optionally selects a different physical object and scans it as a temporary key for a specific mode.
+- **Enroll Temporary Key**: User optionally selects a physical object and scans it as a temporary key for a specific mode. User can enroll multiple temporary keys per mode.
+- **Reuse Key**: User can assign an already-enrolled key to another mode (as main key or temporary key).
 - **Select Active Mode**: User can switch between modes and see which mode is currently active.
 - **Lock Mode**: User can activate "Locked Mode" for the current mode, which blocks selected apps for that mode.
-- **Unlock Mode**: User must scan their main key object to exit Locked Mode.
-- **Temporary Unlock**: When a mode is locked, user can scan that mode's temporary key to unlock specific apps for a limited time (one use per lock cycle).
-- **Edit Mode**: User can modify a mode's configuration (apps to block, temporary key settings).
+- **Unlock Mode**: User must scan that mode's main key object to exit Locked Mode.
+- **Temporary Unlock**: When a mode is locked, user can scan any of that mode's temporary keys to unlock specific apps for a limited time (one use per lock cycle per key).
+- **Edit Mode**: User can modify a mode's configuration (apps to block, main key, temporary keys).
 - **Delete Mode**: User can remove a mode they no longer need.
-- **Replace Key**: User can reset or replace their main key or any mode's temporary key if lost or unreliable.
+- **Replace Key**: User can reset or replace a mode's main key or any temporary key if lost or unreliable.
 - **Scan Failure Recovery**: User is guided through lighting/angle adjustments if verification fails.
 
 ## 4. Architecture
@@ -101,9 +103,9 @@ This approach keeps the architecture simple, testable (unit tests against models
 
 #### Domain Layer
 
-- KeyManager (main key)
+- KeyManager (manages all keys, reusable across modes)
 - ModeManager
-- TemporaryKeyManager (per mode)
+- TemporaryKeyManager (tracks temporary key usage per mode)
 - LockStateManager
 - AppsProfileManager (per mode)
 - Onboarding state management
@@ -117,16 +119,18 @@ This approach keeps the architecture simple, testable (unit tests against models
 
 ### 5.1 KeyManager
 
-Handles enrollment and verification of the user's main key physical object.
+Manages all physical key objects that can be used across modes. Keys can be assigned as main keys or temporary keys for different modes, and the same key can be reused across multiple modes.
 
 **Responsibilities:**
 
-- Take multiple images from camera during enrollment.
+- Manage a collection of all enrolled keys (each key has a unique ID).
+- Take multiple images from camera during key enrollment.
 - Extract feature vectors from each image using Vision/Core ML.
-- Store feature vectors securely on device.
-- During verification, compare new scan against stored vectors.
+- Store feature vectors securely on device (Keychain).
+- During verification, compare new scan against stored vectors for a specific key.
 - Provide confidence scores and error types (e.g., blurry image, low light).
-- Verify main key for full lock/unlock operations.
+- Support key reuse: the same key can be assigned as main key for one mode and temporary key for another mode.
+- Allow keys to be updated, renamed, or removed.
 
 ### 5.2 ModeManager
 
@@ -135,10 +139,13 @@ Manages multiple modes and their configurations.
 **Responsibilities:**
 
 - Create, edit, and delete modes.
-- Store mode configurations (name, apps to block, temporary key settings).
+- Store mode configurations (name, main key ID, temporary key IDs, apps to block).
+- Each mode must have exactly one main key (required).
+- Each mode can have zero or more temporary keys (optional array).
 - Track which mode is currently active/selected.
 - Persist mode data locally.
 - Provide operations: add mode, remove mode, update mode, switch active mode, list all modes.
+- Manage key assignments: set main key for a mode, add/remove temporary keys for a mode.
 
 ### 5.3 LockStateManager
 
@@ -165,18 +172,15 @@ Manages which apps/categories are blocked for each mode during Locked Mode.
 
 ### 5.5 TemporaryKeyManager
 
-Handles enrollment and verification of temporary key physical objects for each mode.
+Tracks temporary key usage state for each mode. Note: Key enrollment is handled by KeyManager; this manager only tracks which temporary keys have been used per lock cycle.
 
 **Responsibilities:**
 
-- Take multiple images from camera during temporary key enrollment (per mode).
-- Extract feature vectors from each image using Vision/Core ML.
-- Store feature vectors securely on device (associated with specific mode).
-- During verification, compare new scan against stored vectors for the active mode.
-- Track temporary unlock state (used/unused per lock cycle) per mode.
-- Enforce one-time use per lock cycle per mode.
-- Manage time-limited app access when temporary key is verified.
-- Support multiple temporary keys (one per mode).
+- Track temporary key usage state per (modeId, keyId) pair.
+- Enforce one-time use per lock cycle per temporary key per mode.
+- Reset temporary key usage when a mode is unlocked (allowing keys to be used again in the next lock cycle).
+- Persist temporary key usage state locally (UserDefaults).
+- Support multiple temporary keys per mode (each tracked independently).
 
 ### 5.6 OnboardingManager
 
@@ -185,10 +189,10 @@ Tracks which onboarding steps have been completed.
 **Steps:**
 
 - Welcome screen
-- Choose & enroll main key object
 - Create first mode (default mode)
+- Choose & enroll main key object for first mode
 - Configure apps to block for first mode
-- Optionally choose & enroll temporary key for first mode
+- Optionally choose & enroll temporary key(s) for first mode
 - Configure Focus Mode
 - Complete onboarding → enter main UI
 
@@ -200,29 +204,28 @@ Tracks which onboarding steps have been completed.
 
 - Introduces the "physical key" concept with examples of good vs bad objects.
 
-**Main Key Enrollment**
-
-- User captures 5–8 photos of the main key object.
-- Real‑time validation: lighting, blur, distinctiveness.
-
-**Temporary Key Enrollment (Optional)**
-
-- User can optionally enroll a temporary key object.
-- Same enrollment process as main key (5–8 photos).
-- User selects which apps can be unlocked with temporary key.
-
 **Create First Mode**
 
 - User creates their first mode (e.g., "Work Mode", "Default Mode").
 - User selects categories or apps to block for this mode.
-- Guided instructions to create a Focus Mode ("Keylock Mode").
-- Add distracting apps to the Focus.
+
+**Main Key Enrollment for First Mode**
+
+- User captures 5–8 photos of the main key object for this mode.
+- Real‑time validation: lighting, blur, distinctiveness.
+- Key is enrolled and assigned as the main key for the first mode.
 
 **Temporary Key Enrollment (Optional)**
 
-- User can optionally enroll a temporary key for the first mode.
+- User can optionally enroll one or more temporary key objects for the first mode.
 - Same enrollment process as main key (5–8 photos).
-- User selects which apps can be unlocked with temporary key.
+- User can reuse an already-enrolled key or enroll a new one.
+- User selects which apps can be unlocked with temporary key(s).
+
+**Configure Focus Mode**
+
+- Guided instructions to create a Focus Mode ("Keylock Mode").
+- Add distracting apps to the Focus.
 
 **Complete**
 
@@ -232,8 +235,10 @@ Tracks which onboarding steps have been completed.
 
 - User can create new modes from settings or main screen.
 - User names the mode and selects apps to block.
-- User can optionally enroll a temporary key for the new mode.
-- User can edit existing modes (change name, apps, temporary key).
+- User must enroll a main key for the new mode (required).
+- User can optionally enroll one or more temporary keys for the new mode.
+- User can reuse existing keys (assign an already-enrolled key as main key or temporary key for the new mode).
+- User can edit existing modes (change name, apps, main key, temporary keys).
 - User can delete modes (with confirmation).
 - User can switch between modes from the main screen.
 
@@ -241,27 +246,30 @@ Tracks which onboarding steps have been completed.
 
 - User selects a mode (if multiple modes exist).
 - User taps "Lock with my key."
-- App scans the main key object to confirm presence.
+- App scans that mode's main key object to confirm presence.
 - On success: Focus Mode turns ON → apps for that mode become blocked.
 - Main screen updates to Locked state, showing which mode is locked.
+- All temporary keys for that mode are reset to unused state.
 
 ### 6.4 Unlock Flow
 
 - User taps "Scan to Unlock."
-- Camera opens for main key scanning.
+- Camera opens for scanning the locked mode's main key.
 - On match: Focus Mode turns OFF → apps become available.
 - Main screen updates to Unlocked state.
-- Temporary key usage resets for the unlocked mode.
+- All temporary key usage resets for the unlocked mode (allowing them to be used again in the next lock cycle).
 
 ### 6.5 Temporary Unlock Flow
 
 - While a mode is locked, user taps "Temporary Unlock."
-- Camera opens for that mode's temporary key scanning.
+- Camera opens for scanning any of that mode's temporary keys.
+- App tries to match the scan against all temporary keys for that mode (skipping already-used keys).
 - On match: Selected apps for that mode become temporarily available for a limited time.
-- Temporary key is marked as used for the current lock cycle of that mode.
+- The matched temporary key is marked as used for the current lock cycle of that mode.
 - After time expires or user manually ends temporary unlock, apps are blocked again.
-- Temporary key cannot be used again until the next lock cycle (after full unlock with main key).
-- Each mode's temporary key usage is tracked independently.
+- That specific temporary key cannot be used again until the next lock cycle (after full unlock with main key).
+- Other temporary keys for the same mode can still be used (if not yet used in this lock cycle).
+- Each temporary key's usage is tracked independently per mode.
 
 ## 7. Computer Vision Design
 
@@ -317,18 +325,18 @@ Tracks which onboarding steps have been completed.
 - Lock state (per mode)
 - Currently active mode
 - App profile selection (per mode)
-- Temporary unlock state (used/unused per cycle, per mode)
+- Temporary unlock state (used/unused per cycle, per (modeId, keyId) pair)
 - Temporary unlock time remaining (per mode)
-- Mode list and configurations
+- Mode list and configurations (including key ID references)
 
 ### Secure Storage
 
-- Feature vectors (Main Key Template)
-- Feature vectors (Temporary Key Templates, per mode if enrolled)
-- Date enrolled (main key)
-- Date enrolled (temporary keys, per mode if enrolled)
-- Mode configurations (names, app lists, temporary key associations)
+- Feature vectors (Key Templates - all keys stored independently)
+- Key metadata (ID, name, enrollment date)
+- Mode configurations (names, main key ID, temporary key IDs, app lists)
 - Versioning info
+
+Note: Keys are stored independently and referenced by ID in modes. The same key can be referenced by multiple modes.
 
 ### Privacy Guarantee
 
@@ -386,7 +394,8 @@ Tracks which onboarding steps have been completed.
 - Better scan flow
 - Error handling
 - Mode switching UX
-- Per-mode temporary key management
+- Per-mode key management (main key + multiple temporary keys)
+- Key reuse UI (assign existing keys to modes)
 
 ### Milestone 5 – Internal Beta (TestFlight)
 
