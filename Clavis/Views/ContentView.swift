@@ -1,6 +1,6 @@
 //
 //  ContentView.swift
-//  clavis
+//  Clavis
 //
 //  Created by Fawwaz Firdaus on 11/26/25.
 //
